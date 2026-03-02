@@ -23,9 +23,9 @@ def create_react_agent(name: str = "Assistant") -> ReActAgent:
     # 从环境变量获取 API Key，如果没有则回退到一个预设值（仅供演示测试）
     api_key = os.environ.get("DASHSCOPE_API_KEY", "your_dashscope_api_key_here")
 
-    # 配置模型，使用 qwen-max
+    # 配置模型，使用 qwen3-max
     model = DashScopeChatModel(
-        model_name="qwen-max",
+        model_name="qwen3-max",
         api_key=api_key,
         generate_kwargs={
             "parallel_tool_calls": True, # 使用支持并行工具调用的配置
