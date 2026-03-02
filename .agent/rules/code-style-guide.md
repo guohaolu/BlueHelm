@@ -9,3 +9,4 @@ trigger: always_on
 5. 代码必须带有python标准的注释，同时代码修改的时候，注释也需要同步修改
 6. 项目架构必须包含单元测试，存放在tests目录下
 7. 本项目可以参考 .agentscope/tutorial/* 中的示例代码
+8. 项目的架构设计可以参考 .assert/* 中的markdown文件和png图（架构设计图）
