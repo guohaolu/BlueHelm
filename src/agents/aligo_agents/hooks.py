@@ -152,31 +152,40 @@ class TaskCollector:
 # AgentScope Print Hook：非侵入式拦截 ReActAgent 的工具调用输出
 # -----------------------------------------------------------------------
 def build_task_print_hook(collector: TaskCollector):
-    """工厂函数：返回一个绑定了特定 TaskCollector 实例的 Hook 函数。
+    """工厂函数：返回一个绑定了特定 TaskCollector 实例的 pre_print Hook 函数。
 
     设计原因：
         Hook 函数需要闭包捕获同一个 collector 实例，
         使用工厂函数可以灵活地为不同请求创建独立的 collector 上下文，
         互不干扰（每次对话请求创建一个新的 collector）。
 
+    AgentScope pre_print hook 签名说明：
+        - 参数 self: AgentBase 实例
+        - 参数 kwargs: dict，包含 print 函数的全部参数（msg, last, speech）
+        - 返回值: dict | None，非 None 时会替代原参数传给下一个 hook 或核心函数
+
     Args:
         collector (TaskCollector): 本次请求关联的任务收集器实例。
 
     Returns:
-        Callable: 符合 AgentScope pre_print_hook 签名的异步函数。
+        Callable: 符合 AgentScope pre_print hook 签名的异步函数。
     """
-    async def task_print_hook(agent: ReActAgent, msg: Msg, *args, **kwargs) -> Msg:
-        """前置打印钩子：拦截 AgentScope 消息并通知 TaskCollector。
+    async def task_print_hook(
+        self: ReActAgent,
+        kwargs: dict,
+    ) -> dict | None:
+        """前置打印钩子：在 AgentScope 调用 agent.print() 之前触发。
 
-        当 AgentScope 调用 agent.print() 之前，此 hook 会被触发。
-        通过检查消息内容块的类型，区分工具调用（tool_use）和工具结果（tool_result）。
+        通过检查 kwargs['msg'].content 块的类型，区分工具调用（tool_use）
+        和工具结果（tool_result），并通知 TaskCollector 更新状态。
 
         Args:
-            agent (ReActAgent): 触发打印的 Agent 实例。
-            msg (Msg): 即将被打印的消息对象。
+            self (ReActAgent): 触发打印的 Agent 实例。
+            kwargs (dict): print 函数的参数字典，包含 'msg'、'last'、'speech' 键。
         """
-        if not msg.content or not isinstance(msg.content, list):
-            return msg
+        msg = kwargs.get("msg")
+        if msg is None or not msg.content or not isinstance(msg.content, list):
+            return None
 
         block = msg.content[0] if msg.content else {}
         block_type = block.get("type", "") if isinstance(block, dict) else ""
@@ -193,7 +202,11 @@ def build_task_print_hook(collector: TaskCollector):
             output_content = block.get("output", [])
             output_text = ""
             if isinstance(output_content, list) and output_content:
-                output_text = output_content[0].get("text", "") if isinstance(output_content[0], dict) else str(output_content[0])
+                output_text = (
+                    output_content[0].get("text", "")
+                    if isinstance(output_content[0], dict)
+                    else str(output_content[0])
+                )
             await collector.add_tool_result(
                 tool_id=block.get("id", ""),
                 output=output_text,
@@ -202,20 +215,27 @@ def build_task_print_hook(collector: TaskCollector):
 
         # 同时打印到终端，便于本地调试
         print(f"[HOOK] {block_type} | {block.get('name', '')} => {str(block)[:120]}")
-        return msg
+        # 返回 None：不修改任何 print 参数，原样传递给核心 print 函数
+        return None
 
     return task_print_hook
 
 
 def register_task_hook(collector: TaskCollector) -> None:
-    """将 task_print_hook 注册到 ReActAgent 的类级别 print hook 上。
+    """将 task_print_hook 注册到 ReActAgent 的类级别 pre_print hook 上。
 
     设计原因：
         AgentScope 的 register_class_hook 作用于类的所有实例，
         对所有 ReActAgent 对象统一生效，所以只需调用一次即可覆盖全链路。
+        Hook 类型使用 pre_print（打印前触发），保证在消息发送到前端之前
+        先完成 TaskCollector 的状态更新。
 
     Args:
         collector (TaskCollector): 用于广播工具调用状态的收集器实例。
     """
     hook_fn = build_task_print_hook(collector)
-    ReActAgent.register_class_hook("print", "task_print_hook", hook_fn)
+    ReActAgent.register_class_hook(
+        hook_type="pre_print",
+        hook_name="task_print_hook",
+        hook=hook_fn,
+    )
