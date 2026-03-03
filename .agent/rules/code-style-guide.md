@@ -10,3 +10,4 @@ trigger: always_on
 6. 项目架构必须包含单元测试，存放在tests目录下
 7. 本项目可以参考 .agentscope/tutorial/* 中的示例代码
 8. 项目的架构设计可以参考 .assert/* 中的markdown文件和png图（架构设计图）
+9. 我是python和agent框架的新手，所以代码注释需要进一步详细，因为我有很多语法和api不理解
